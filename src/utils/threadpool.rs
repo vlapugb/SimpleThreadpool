@@ -1,62 +1,50 @@
-use std::thread;
-use std::thread::Builder;
-use queue::*;
-use std::collections::*;
-use std::sync::*;
-use std::fmt::*;
 use crossbeam::channel::*;
-type Job<R> = Box<dyn FnOnce() -> R  + Send + 'static>;
+use std::fmt::*;
+use std::thread;
 
-pub struct ThrdPool<R> {
-    deq: crossbeam::channel::Sender<Job<R>>,
+type Job<R> = Box<dyn FnOnce() -> R + Send + 'static>;
+pub struct ThreadPool<R> {
+    deq: Sender<Job<R>>,
     workers: Vec<thread::JoinHandle<()>>,
-    poolsize: usize,
 }
 
-
-impl<R> ThrdPool<R> where
+impl<R> ThreadPool<R>
+where
     R: Debug + Send + 'static,
 {
-    pub fn new(size: usize) -> ThrdPool<R> {
+    pub fn new(size: usize) -> ThreadPool<R> {
         let mut workers: Vec<thread::JoinHandle<()>> = Vec::new();
         let (tx, rx): (Sender<Job<R>>, Receiver<Job<R>>) = unbounded();
-        for thrd in 0..size {
-            let rxclone = rx.clone();
-            
-            let res = workers.push(thread::spawn( move || {
-                let thrde = thrd;
-                while let Ok(job) = rxclone.recv() {
-                    println!("Thread {} got job!", thrde);
-                    let res = job();
+        for thread in 0..size {
+            let rx_clone = rx.clone();
+
+            workers.push(thread::spawn(move || {
+                let copy_thread = thread;
+                while let Ok(job) = rx_clone.recv() {
+                    println!("Thread {} got job!", copy_thread);
+                    job();
                 }
-                
-                println!("Worker #{} shutting down", thrde);
-            }
-            ));
-            
+
+                println!("Worker #{} shutting down", copy_thread);
+            }));
         }
-        
-        ThrdPool {
-            deq: tx,
-            workers,
-            poolsize: size,
-        }
-        
+
+        ThreadPool { deq: tx, workers }
     }
     pub fn enqueue<F>(&self, f: F) -> Receiver<R>
-    where 
-        F: FnOnce() -> R + Send + 'static {
-        let (res_tx, res_rx): (Sender<R>, Receiver<R>) = unbounded();
+    where
+        F: FnOnce() -> R + Send + 'static,
+    {
+        let (_result_tx, result_rx): (Sender<R>, Receiver<R>) = unbounded();
         let job = Box::new(f);
         self.deq.send(job).unwrap();
-        res_rx
+        result_rx
     }
-    
+
     pub fn dispose(self) {
         drop(self.deq);
         for w in self.workers {
             w.join().unwrap();
         }
     }
-
 }
