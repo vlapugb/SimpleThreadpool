@@ -1,0 +1,9 @@
+[package]
+name = "SimpleThreadpool"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+queue = "0.3.1"
+crossbeam = "0.8.4"
+futures = { version = "0.3.31", features = ["thread-pool"] }
