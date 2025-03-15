@@ -43,8 +43,8 @@ where
 
     pub fn dispose(self) {
         drop(self.deq);
-        for w in self.workers {
-            w.join().unwrap();
+        for worker in self.workers {
+            worker.join().unwrap();
         }
     }
 }
